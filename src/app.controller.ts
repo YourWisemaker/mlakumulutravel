@@ -16,10 +16,5 @@ export class AppController {
     return { url: 'api/docs' };
   }
 
-  @ApiOperation({ summary: "Get API health status" })
-  @ApiResponse({ status: 200, description: "Returns health status of the API" })
-  @Get('health')
-  getHealth(): { status: string; version: string; timestamp: string } {
-    return this.appService.getHealth();
-  }
+  // Health endpoint moved to dedicated HealthModule with Terminus
 }
