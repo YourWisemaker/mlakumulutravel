@@ -3,6 +3,9 @@
   functions = "netlify/functions"
   publish = "dist"
 
+[build.environment]
+  NODE_VERSION = "22.15.1"
+
 [dev]
   command = "npm run start:dev"
   port = 8888
