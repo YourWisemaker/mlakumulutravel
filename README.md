@@ -267,9 +267,53 @@ Transactions are automatically created when trips are added or removed. To test 
 
 ## Deployment
 
-### Backend Deployment
+### Railway Deployment
 
-The backend API can be deployed to cloud platforms like Render, Heroku, or DigitalOcean.
+The application is fully compatible with Railway for easy deployment:
+
+1. **Create a Railway Account**:
+   - Sign up at [railway.app](https://railway.app)
+
+2. **Install Railway CLI (Optional)**:
+   ```bash
+   npm i -g @railway/cli
+   railway login
+   ```
+
+3. **Deploy from the Dashboard**:
+   - From the Railway dashboard, click "New Project"
+   - Select "Deploy from GitHub repo"
+   - Select your repository
+   - Railway will automatically detect the project as a NestJS application
+
+4. **Configure Environment Variables**:
+   - Add the following environment variables in the Railway dashboard:
+     - `DATABASE_URL`: This will be automatically configured if you add a PostgreSQL database
+     - `JWT_SECRET`: Your JWT secret key
+     - `JWT_EXPIRATION`: JWT token expiration time in seconds
+     - `OPENROUTER_API_KEY`: Your OpenRouter API key for sentiment analysis
+     - `NODE_ENV`: Set to "production"
+
+5. **Add a Database**:
+   - Click "+ New" and select "PostgreSQL"
+   - Railway will automatically provision a PostgreSQL database
+   - Railway will set the DATABASE_URL environment variable
+
+6. **Run Database Migrations**:
+   - In the Railway dashboard, go to your service settings
+   - Add a "Service Command" with: `npx prisma migrate deploy && npm run start:prod`
+   - This will ensure your database schema is applied before starting the application
+
+7. **Configure Domain (Optional)**:
+   - In your service settings, navigate to the "Settings" tab
+   - Under "Domains", you can configure a custom domain or use the Railway-provided domain
+
+8. **Monitor Application**:
+   - Railway provides logs, metrics, and other monitoring tools in the dashboard
+
+### Backend Deployment (Other Platforms)
+
+The backend API can also be deployed to cloud platforms like Render, Heroku, or DigitalOcean.
 
 ### Frontend Deployment with Netlify
 

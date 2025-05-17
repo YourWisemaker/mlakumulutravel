@@ -6,7 +6,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   private readonly prisma: PrismaClient;
 
   constructor() {
-    // Create a new PrismaClient explicitly using dataSourceOverrides to bypass any caching issues
+    // Create a new PrismaClient with Railway compatibility
     this.prisma = new PrismaClient({
       log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
       datasources: {
@@ -15,6 +15,9 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
         },
       },
     });
+    
+    // Note: Prisma Accelerate is configured at the connection string level in Railway
+    // DATABASE_URL would contain the Accelerate URL if provided through Railway
   }
 
   async onModuleInit() {
