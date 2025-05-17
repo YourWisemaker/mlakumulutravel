@@ -1,6 +1,4 @@
-import { Controller, Get, Param, UseGuards } from "@nestjs/common";
-// Keeping these imports for future use
-import { type Post as _Post, type Body as _Body } from "@nestjs/common";
+import { Controller, Get, Param, UseGuards, type Post as _Post, type Body as _Body } from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,

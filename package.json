@@ -5,7 +5,7 @@
   "main": "dist/main.js",
   "scripts": {
     "prebuild": "rimraf dist",
-    "build": "nest build && npm run netlify:prepare",
+    "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -26,10 +26,7 @@
     "prisma:seed": "prisma db seed",
     "prisma:studio": "prisma studio",
     "prisma:format": "prisma format",
-    "prisma:pull": "prisma db pull",
-    "netlify:prepare": "cp -r netlify dist/",
-    "netlify:dev": "netlify dev",
-    "netlify:build": "npm run build && npm run netlify:prepare"
+    "prisma:pull": "prisma db pull"
   },
   "keywords": [
     "nestjs",
@@ -64,8 +61,7 @@
     "rimraf": "^5.0.10",
     "rxjs": "^7.8.2",
     "serverless-http": "^3.2.0",
-    "typeorm": "^0.3.24",
-    "uuid": "^11.1.0"
+    "typeorm": "^0.3.24"
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",
@@ -75,7 +71,6 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^22.15.18",
     "@types/passport-jwt": "^4.0.1",
-    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.32.1",
     "@typescript-eslint/parser": "^8.32.1",
     "eslint": "^9.27.0",

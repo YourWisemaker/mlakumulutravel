@@ -19,7 +19,16 @@ module.exports = [
       },
       globals: {
         ...globals.node,
-        ...globals.jest // Add Jest globals
+        ...globals.jest,
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        jest: 'readonly'
       }
     },
     plugins: {
