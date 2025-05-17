@@ -1,0 +1,169 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// User model with role enum
+enum UserRole {
+  EMPLOYEE
+  TOURIST
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole @default(TOURIST)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  employee     Employee?
+  tourist      Tourist?
+  transactions Transaction[] @relation("CreatedByUser")
+}
+
+// Employee model
+model Employee {
+  id         String    @id @default(uuid())
+  position   String?
+  department String?
+  hireDate   DateTime?
+  employeeId String?
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @unique // Employee has one-to-one relation with User
+}
+
+// Tourist model
+model Tourist {
+  id             String    @id @default(uuid())
+  passportNumber String?
+  nationality    String?
+  dateOfBirth    DateTime?
+  phoneNumber    String?
+  address        String?
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id])
+  userId       String        @unique // Tourist has one-to-one relation with User
+  trips        Trip[]
+  feedbacks    Feedback[]
+  transactions Transaction[] @relation("TouristTransactions")
+}
+
+// Trip model
+model Trip {
+  id              String   @id @default(uuid())
+  name            String
+  startDateTime   DateTime
+  endDateTime     DateTime
+  tripDestination Json // Store destination details as JSON
+  description     String?
+  price           Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  tourist            Tourist             @relation(fields: [touristId], references: [id])
+  touristId          String
+  feedbacks          Feedback[]
+  transactionDetails TransactionDetail[]
+}
+
+// Sentiment analysis enum and model
+enum SentimentType {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+model SentimentAnalysis {
+  id          String        @id @default(uuid())
+  sentiment   SentimentType @default(NEUTRAL)
+  confidence  Float         @default(0)
+  rawAnalysis Json?
+  createdAt   DateTime      @default(now())
+
+  // Relations
+  feedback Feedback?
+}
+
+// Feedback model
+model Feedback {
+  id        String   @id @default(uuid())
+  rating    Int      @default(0)
+  comment   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  trip                Trip              @relation(fields: [tripId], references: [id])
+  tripId              String
+  tourist             Tourist           @relation(fields: [touristId], references: [id])
+  touristId           String
+  sentimentAnalysis   SentimentAnalysis @relation(fields: [sentimentAnalysisId], references: [id])
+  sentimentAnalysisId String            @unique // Feedback has one-to-one relation with SentimentAnalysis
+}
+
+// Transaction Status enum
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// Payment Method enum
+enum PaymentMethod {
+  CREDIT_CARD
+  BANK_TRANSFER
+  PAYPAL
+  CASH
+}
+
+// Transaction model
+model Transaction {
+  id              String            @id @default(uuid())
+  transactionDate DateTime          @default(now())
+  amount          Decimal           @db.Decimal(10, 2)
+  status          TransactionStatus @default(PENDING)
+  paymentMethod   PaymentMethod
+  referenceNumber String?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relations
+  tourist            Tourist             @relation("TouristTransactions", fields: [touristId], references: [id])
+  touristId          String
+  createdBy          User                @relation("CreatedByUser", fields: [createdById], references: [id])
+  createdById        String
+  transactionDetails TransactionDetail[]
+}
+
+// TransactionDetail model
+model TransactionDetail {
+  id          String   @id @default(uuid())
+  amount      Decimal  @db.Decimal(10, 2)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transactionId String
+  trip          Trip        @relation(fields: [tripId], references: [id])
+  tripId        String
+}
