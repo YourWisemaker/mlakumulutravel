@@ -7,6 +7,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { CreateUserDto } from "./dto/create-user.dto";
 // Keeping for future use
 import { type Prisma as _Prisma } from "@prisma/client";
+import * as bcrypt from "bcrypt";
 
 @Injectable()
 export class UsersService {
@@ -30,11 +31,20 @@ export class UsersService {
       throw new ConflictException("Email already exists");
     }
 
+    // Hash the password before storing in database
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    
+    // Create a new object with the hashed password
+    const userDataToSave = {
+      ...createUserDto,
+      password: hashedPassword,
+    };
+
     // Use Prisma transaction to create user and role-specific record in a single transaction
     if (createUserDto.role === "EMPLOYEE") {
       return this.prisma.user.create({
         data: {
-          ...createUserDto,
+          ...userDataToSave,
           employee: {
             create: {},
           },
@@ -43,7 +53,7 @@ export class UsersService {
     } else {
       return this.prisma.user.create({
         data: {
-          ...createUserDto,
+          ...userDataToSave,
           tourist: {
             create: {},
           },
