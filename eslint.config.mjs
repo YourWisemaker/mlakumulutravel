@@ -1,12 +1,26 @@
-const eslint = require('@eslint/js');
-const globals = require('globals');
-const typescriptParser = require('@typescript-eslint/parser');
-const typescriptPlugin = require('@typescript-eslint/eslint-plugin');
+import eslint from '@eslint/js';
+import globals from 'globals';
+import typescriptParser from '@typescript-eslint/parser';
+import typescriptPlugin from '@typescript-eslint/eslint-plugin';
 
-module.exports = [
+export default [
   eslint.configs.recommended,
   {
     ignores: ['node_modules/**', 'dist/**', 'generated/**'],
+  },
+  // Configuration for CommonJS JavaScript files (like Netlify functions)
+  {
+    files: ['**/*.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      // Add any specific rules for JS files here
+    },
   },
   {
     files: ['**/*.ts'],

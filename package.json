@@ -19,6 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand --config jest.config.cjs",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prepare": "husky",
+    "postinstall": "prisma generate",
     "prisma": "prisma",
     "seed": "ts-node -r tsconfig-paths/register src/database/seed.ts",
     "prisma:generate": "prisma generate",
