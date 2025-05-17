@@ -2,25 +2,27 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
 import { PrismaClient } from "@prisma/client";
 
 @Injectable()
-export class PrismaService
-  extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
+export class PrismaService implements OnModuleInit, OnModuleDestroy {
+  private readonly prisma: PrismaClient;
+
   constructor() {
-    super({
-      log:
-        process.env.NODE_ENV === "development"
-          ? ["query", "error", "warn"]
-          : ["error"],
+    // Create a new PrismaClient explicitly using dataSourceOverrides to bypass any caching issues
+    this.prisma = new PrismaClient({
+      log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL
+        },
+      },
     });
   }
 
   async onModuleInit() {
-    await this.$connect();
+    await this.prisma.$connect();
   }
 
   async onModuleDestroy() {
-    await this.$disconnect();
+    await this.prisma.$disconnect();
   }
 
   async cleanDatabase() {
@@ -29,13 +31,44 @@ export class PrismaService
     }
 
     // Use Prisma's transaction to ensure all deletes succeed or fail together
-    return this.$transaction([
-      this.feedback.deleteMany(),
-      this.sentimentAnalysis.deleteMany(),
-      this.trip.deleteMany(),
-      this.tourist.deleteMany(),
-      this.employee.deleteMany(),
-      this.user.deleteMany(),
+    return this.prisma.$transaction([
+      this.prisma.feedback.deleteMany(),
+      this.prisma.sentimentAnalysis.deleteMany(),
+      this.prisma.trip.deleteMany(),
+      this.prisma.tourist.deleteMany(),
+      this.prisma.employee.deleteMany(),
+      this.prisma.user.deleteMany(),
     ]);
+  }
+  
+  // Expose Prisma models through getters
+  get user() { return this.prisma.user; }
+  get employee() { return this.prisma.employee; }
+  get tourist() { return this.prisma.tourist; }
+  get trip() { return this.prisma.trip; }
+  get feedback() { return this.prisma.feedback; }
+  get sentimentAnalysis() { return this.prisma.sentimentAnalysis; }
+  get transaction() { return this.prisma.transaction; }
+  get transactionDetail() { return this.prisma.transactionDetail; }
+  
+  // Forward transaction and raw query methods
+  $transaction(arg: any): Promise<any> {
+    return this.prisma.$transaction(arg);
+  }
+  
+  $queryRaw<T = any>(query: any, ...values: any[]): Promise<T> {
+    return this.prisma.$queryRaw(query, ...values);
+  }
+  
+  $queryRawUnsafe<T = any>(query: string, ...values: any[]): Promise<T> {
+    return this.prisma.$queryRawUnsafe(query, ...values);
+  }
+  
+  $executeRaw(query: any, ...values: any[]): Promise<number> {
+    return this.prisma.$executeRaw(query, ...values);
+  }
+  
+  $executeRawUnsafe(query: string, ...values: any[]): Promise<number> {
+    return this.prisma.$executeRawUnsafe(query, ...values);
   }
 }
