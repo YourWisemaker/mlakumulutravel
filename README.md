@@ -329,9 +329,9 @@ The application is fully compatible with Railway for easy deployment:
 
 The backend API can also be deployed to cloud platforms like Render, Heroku, or DigitalOcean.
 
-### Frontend Deployment with Netlify
+### Backend Deployment with Netlify
 
-For the frontend or a static site generator that documents the API, you can use Netlify for easy deployment:
+Netlify can also be used to deploy the NestJS API as an alternative to Railway:
 
 1. **Create a Netlify Account**:
    - Sign up at [netlify.com](https://www.netlify.com)
@@ -340,22 +340,25 @@ For the frontend or a static site generator that documents the API, you can use 
    - Go to the Netlify dashboard and click "New site from Git"
    - Select your Git provider (GitHub, GitLab, or Bitbucket)
    - Authorize Netlify to access your repositories
-   - Select the repository containing your frontend code
+   - Select the repository containing your NestJS API code
 
 3. **Configure Build Settings**:
-   - **Build command**: `npm run build` (or your specific build command)
-   - **Publish directory**: `dist` or `build` (depending on your frontend framework)
-   - **Node version**: Select the appropriate Node.js version (14.x or higher recommended)
+   - **Build command**: `npm run build` 
+   - **Publish directory**: `dist` (this is where NestJS outputs compiled files)
+   - **Node version**: Select Node.js v22+ to match the project requirements
 
 4. **Environment Variables**:
    - Add necessary environment variables in Site settings > Build & deploy > Environment
-   - Include `VITE_API_URL` or similar to point to your backend API
+   - Make sure to include database connection strings, API keys, and other required configuration
 
-5. **Deploy**:
-   - Click "Deploy site"
-   - Netlify will build and deploy your site automatically
+5. **Configure netlify.toml**:
+   - Include proper Node.js version settings in `netlify.toml`
+   - Configure serverless function settings as needed for API endpoints
 
-6. **Custom Domain (Optional)**:
+6. **Deploy**:
+   - Netlify will automatically build and deploy your API service
+
+7. **Custom Domain (Optional)**:
    - Go to Domain settings
    - Add your custom domain or use the free Netlify subdomain
 
