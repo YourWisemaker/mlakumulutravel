@@ -11,22 +11,24 @@ A full-featured backend REST API for the Mlaku-Mulu travel agency, built with Ty
 - Tourist feedback & rating system
 - Trip report exports in PDF and CSV formats
 - AI-powered sentiment analysis on feedback using OpenRouter API
+- AI-powered trip recommendations based on tourist history
 
 ## Tech Stack
 
 - **TypeScript**: Strongly typed programming language
 - **NestJS**: Progressive Node.js framework
-- **MySQL**: Database with TypeORM integration
+- **PostgreSQL**: Database with Prisma ORM integration
+- **Prisma Accelerate**: Enhanced database performance
 - **JWT**: Authentication and authorization
 - **Swagger/OpenAPI**: API documentation
-- **OpenRouter API**: AI-powered sentiment analysis
+- **OpenRouter API**: AI-powered sentiment analysis and trip recommendations
 - **PDF/CSV Export**: Report generation capabilities
 
 ## Prerequisites
 
-- Node.js (v18+)
+- Node.js (v22+)
 - npm or yarn
-- MySQL server
+- PostgreSQL database
 
 ## Setup & Installation
 
@@ -44,10 +46,12 @@ A full-featured backend REST API for the Mlaku-Mulu travel agency, built with Ty
 3. **Configure environment variables**:
    Create a `.env` file in the root directory using the `.env.example` template with your specific configurations.
 
-4. **Set up the MySQL database**:
+4. **Set up the PostgreSQL database**:
    ```sql
    CREATE DATABASE mlakumulu_db;
    ```
+   
+   Or use a cloud-hosted PostgreSQL service like Supabase, Railway, or Neon.
 
 5. **Build the application**:
    ```bash
@@ -141,6 +145,8 @@ The transaction management system automatically creates transaction records when
    - COMPLETED: Payment has been fully processed
    - FAILED: Payment processing failed
    - REFUNDED: Payment has been refunded
+   
+   Each transaction has a unique reference number generated using UUID.
 
 4. **Payment Methods**:
    - CREDIT_CARD: Credit card payment
@@ -150,6 +156,14 @@ The transaction management system automatically creates transaction records when
 
 #### Reports
 - `POST /api/reports/export` - Export trip reports in PDF or CSV format
+
+## Additional Features
+
+### AI-Powered Trip Recommendations
+
+The system uses artificial intelligence to analyze a tourist's past trips and provide personalized destination recommendations:
+
+- `GET /api/trips/recommendation/:touristId` - Get AI-generated trip recommendations for a specific tourist
 
 ## Database Schema
 
