@@ -12,6 +12,7 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { TransactionsModule } from "./transactions/transactions.module";
 import { HealthModule } from "./health/health.module";
+import { RecommendationModule } from "./recommendation/recommendation.module";
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { HealthModule } from "./health/health.module";
     SentimentModule,
     TransactionsModule,
     HealthModule,
+    RecommendationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

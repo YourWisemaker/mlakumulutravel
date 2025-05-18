@@ -1,13 +1,17 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm run build"
+# Skip build during the build phase, we'll do it in the startup script
+buildCommand = "npm install && npx prisma generate"
 
 [deploy]
-startCommand = "./railway-start.sh"
+startCommand = "chmod +x railway-start.sh && ./railway-start.sh"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5
+
+# Make sure the app is executed from project root
+root = "/app"
 
 [databases.postgresql]
 version = "15"

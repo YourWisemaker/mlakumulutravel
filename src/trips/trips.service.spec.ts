@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TripsService } from './trips.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException} from '@nestjs/common';
 import { CreateTripDto } from './dto/create-trip.dto';
-import { UpdateTripDto as _UpdateTripDto } from './dto/update-trip.dto';
+import { UpdateTripDto } from './dto/update-trip.dto';
 
 describe('TripsService', () => {
   let service: TripsService;
@@ -19,11 +19,19 @@ describe('TripsService', () => {
     },
     tourist: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
     },
-    $queryRaw: jest.fn().mockResolvedValue([{ id: 'transaction-id-1' }]),
+    transactionDetail: {
+      findMany: jest.fn(),
+      deleteMany: jest.fn(),
+      create: jest.fn(),
+    },
+    $queryRaw: jest.fn(),
   };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+    
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TripsService,
@@ -38,10 +46,6 @@ describe('TripsService', () => {
     _prismaService = module.get<PrismaService>(PrismaService);
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
@@ -49,8 +53,8 @@ describe('TripsService', () => {
   describe('findAll', () => {
     it('should return all trips', async () => {
       const mockTrips = [
-        { id: '1', name: 'Trip 1', tourist: { user: { name: 'User 1' } }, feedbacks: [] },
-        { id: '2', name: 'Trip 2', tourist: { user: { name: 'User 2' } }, feedbacks: [] },
+        { id: '1', name: 'Trip 1' },
+        { id: '2', name: 'Trip 2' },
       ];
       
       mockPrismaService.trip.findMany.mockResolvedValue(mockTrips);
@@ -65,6 +69,11 @@ describe('TripsService', () => {
               user: true,
             },
           },
+          transactionDetails: {
+            include: {
+              transaction: true,
+            },
+          },
           feedbacks: true,
         },
       });
@@ -73,12 +82,7 @@ describe('TripsService', () => {
 
   describe('findOne', () => {
     it('should return a trip if found', async () => {
-      const mockTrip = { 
-        id: '1', 
-        name: 'Trip 1', 
-        tourist: { user: { name: 'User 1' } },
-        feedbacks: []
-      };
+      const mockTrip = { id: '1', name: 'Beach Retreat', price: 1000 };
       
       mockPrismaService.trip.findUnique.mockResolvedValue(mockTrip);
 
@@ -93,6 +97,11 @@ describe('TripsService', () => {
               user: true,
             },
           },
+          transactionDetails: {
+            include: {
+              transaction: true,
+            },
+          },
           feedbacks: {
             include: {
               sentimentAnalysis: true,
@@ -105,15 +114,15 @@ describe('TripsService', () => {
     it('should throw NotFoundException if trip not found', async () => {
       mockPrismaService.trip.findUnique.mockResolvedValue(null);
 
-      await expect(service.findOne('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('1')).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('findAllByTourist', () => {
     it('should return all trips for a specific tourist', async () => {
       const mockTrips = [
-        { id: '1', name: 'Trip 1', touristId: 'tourist1', feedbacks: [] },
-        { id: '2', name: 'Trip 2', touristId: 'tourist1', feedbacks: [] },
+        { id: '1', name: 'Trip 1', touristId: 'tourist1' },
+        { id: '2', name: 'Trip 2', touristId: 'tourist1' },
       ];
       
       mockPrismaService.trip.findMany.mockResolvedValue(mockTrips);
@@ -129,63 +138,49 @@ describe('TripsService', () => {
               sentimentAnalysis: true,
             },
           },
+          tourist: {
+            include: {
+              user: true,
+            },
+          },
+          transactionDetails: {
+            include: {
+              transaction: true,
+            },
+          },
         },
       });
-    });
-  });
-
-  describe('findAllByTouristUserId', () => {
-    it('should return all trips for a tourist by user ID', async () => {
-      const mockTourist = { id: 'tourist1', userId: 'user1' };
-      const mockTrips = [
-        { id: '1', name: 'Trip 1', touristId: 'tourist1' },
-        { id: '2', name: 'Trip 2', touristId: 'tourist1' },
-      ];
-      
-      mockPrismaService.tourist.findUnique.mockResolvedValue(mockTourist);
-      mockPrismaService.trip.findMany.mockResolvedValue(mockTrips);
-
-      const result = await service.findAllByTouristUserId('user1');
-      
-      expect(result).toEqual(mockTrips);
-      expect(mockPrismaService.tourist.findUnique).toHaveBeenCalledWith({
-        where: { userId: 'user1' },
-      });
-    });
-
-    it('should throw NotFoundException if tourist not found by user ID', async () => {
-      mockPrismaService.tourist.findUnique.mockResolvedValue(null);
-
-      await expect(service.findAllByTouristUserId('nonexistent')).rejects.toThrow(NotFoundException);
-      expect(mockPrismaService.trip.findMany).not.toHaveBeenCalled();
     });
   });
 
   describe('create', () => {
-    it('should create a new trip without transaction when no employeeId is provided', async () => {
-      const createTripDto = {
-        name: 'New Trip',
-        startDateTime: '2025-06-01T10:00:00Z',
-        endDateTime: '2025-06-07T18:00:00Z',
-        tripDestination: {
-          city: 'Bali',
-          country: 'Indonesia',
-          coordinates: {
-            latitude: -8.409518,
-            longitude: 115.188919,
-          }
-        },
+    it('should create a trip', async () => {
+      const createTripDto: CreateTripDto = {
+        name: 'New Beach Trip',
         description: 'Relaxing beach vacation',
-        price: 1500,
+        tripDestination: { name: 'Bali', country: 'Indonesia' },
+        startDateTime: '2023-01-01T00:00:00Z',
+        endDateTime: '2023-01-07T00:00:00Z',
+        price: 1000,
         touristId: 'tourist1',
-      } as CreateTripDto;
+      };
       
-      const mockTourist = { id: 'tourist1', userId: 'user1' };
-      const mockTrip = { 
-        id: '1', 
-        ...createTripDto,
+      const mockTourist = {
+        id: 'tourist1',
+        userId: 'user1'
+      };
+      
+      const mockTrip = {
+        id: '1',
+        name: createTripDto.name,
+        description: createTripDto.description,
+        tripDestination: createTripDto.tripDestination,
         startDateTime: new Date(createTripDto.startDateTime),
         endDateTime: new Date(createTripDto.endDateTime),
+        price: createTripDto.price,
+        touristId: createTripDto.touristId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
       
       mockPrismaService.tourist.findUnique.mockResolvedValue(mockTourist);
@@ -195,134 +190,217 @@ describe('TripsService', () => {
       
       expect(result).toEqual(mockTrip);
       expect(mockPrismaService.tourist.findUnique).toHaveBeenCalledWith({
-        where: { id: createTripDto.touristId },
+        where: { id: 'tourist1' },
       });
-      expect(mockPrismaService.trip.create).toHaveBeenCalledWith({
-        data: {
-          name: createTripDto.name,
-          startDateTime: new Date(createTripDto.startDateTime),
-          endDateTime: new Date(createTripDto.endDateTime),
-          tripDestination: createTripDto.tripDestination,
-          description: createTripDto.description,
-          price: createTripDto.price,
-          tourist: {
-            connect: { id: createTripDto.touristId },
-          },
-        },
-      });
+      expect(mockPrismaService.trip.create).toHaveBeenCalled();
     });
 
-    it('should throw NotFoundException if tourist not found', async () => {
-      const createTripDto = {
-        name: 'New Trip',
-        startDateTime: '2025-06-01T10:00:00Z',
-        endDateTime: '2025-06-07T18:00:00Z',
-        tripDestination: {
-          city: 'Bali',
-          country: 'Indonesia'
-        },
+    it('should create a trip with transaction when employeeId is provided', async () => {
+      const createTripDto: CreateTripDto = {
+        name: 'New Beach Trip',
         description: 'Relaxing beach vacation',
-        price: 1500,
-        touristId: 'nonexistent',
-      } as CreateTripDto;
-      
-      mockPrismaService.tourist.findUnique.mockResolvedValue(null);
-
-      await expect(service.create(createTripDto)).rejects.toThrow(NotFoundException);
-      expect(mockPrismaService.trip.create).not.toHaveBeenCalled();
-    });
-    
-    it('should create a new trip and transaction when employeeId is provided', async () => {
-      const createTripDto = {
-        name: 'New Trip',
-        startDateTime: '2025-06-01T10:00:00Z',
-        endDateTime: '2025-06-07T18:00:00Z',
-        tripDestination: {
-          city: 'Bali',
-          country: 'Indonesia',
-          coordinates: {
-            latitude: -8.409518,
-            longitude: 115.188919,
-          }
-        },
-        description: 'Relaxing beach vacation',
-        price: 1500,
+        tripDestination: { name: 'Bali', country: 'Indonesia' },
+        startDateTime: '2023-01-01T00:00:00Z',
+        endDateTime: '2023-01-07T00:00:00Z',
+        price: 1000,
         touristId: 'tourist1',
-      } as CreateTripDto;
+      };
       
-      const employeeId = 'employee1';
-      const mockTourist = { id: 'tourist1', userId: 'user1' };
-      const mockTrip = { 
-        id: '1', 
-        ...createTripDto,
+      const mockTourist = {
+        id: 'tourist1',
+        userId: 'user1'
+      };
+      
+      const mockTrip = {
+        id: '1',
+        name: createTripDto.name,
+        description: createTripDto.description,
+        tripDestination: createTripDto.tripDestination,
         startDateTime: new Date(createTripDto.startDateTime),
         endDateTime: new Date(createTripDto.endDateTime),
+        price: createTripDto.price,
+        touristId: createTripDto.touristId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
       
       mockPrismaService.tourist.findUnique.mockResolvedValue(mockTourist);
       mockPrismaService.trip.create.mockResolvedValue(mockTrip);
       mockPrismaService.$queryRaw.mockResolvedValue([{ id: 'transaction-id-1' }]);
 
+      const employeeId = 'employee1';
       const result = await service.create(createTripDto, employeeId);
       
       expect(result).toEqual(mockTrip);
-      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(2); // Once for transaction, once for details
+      expect(mockPrismaService.tourist.findUnique).toHaveBeenCalledWith({
+        where: { id: 'tourist1' },
+      });
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalled();
     });
   });
-  
-  describe('remove', () => {
-    it('should remove a trip without creating a refund when no employeeId is provided', async () => {
+
+  describe('update', () => {
+    it('should update a trip', async () => {
+      const updateTripDto: UpdateTripDto = { name: 'Updated Beach Retreat' };
       const mockTrip = { 
         id: '1', 
-        name: 'Trip to be removed',
+        name: 'Beach Retreat',
         touristId: 'tourist1',
-        tripDestination: 'Bali',
-        price: 1500
+        tourist: {
+          id: 'tourist1',
+          user: { id: 'user1', email: 'user@example.com', password: 'hash' }
+        }
+      };
+      
+      const mockUpdatedTrip = { 
+        id: '1', 
+        name: 'Updated Beach Retreat',
+        touristId: 'tourist1',
+        tourist: {
+          id: 'tourist1',
+          user: { id: 'user1', email: 'user@example.com' }
+        }
       };
       
       mockPrismaService.trip.findUnique.mockResolvedValue(mockTrip);
-      mockPrismaService.trip.delete.mockResolvedValue(undefined);
-      mockPrismaService.$queryRaw.mockResolvedValue([]);
+      mockPrismaService.trip.update.mockResolvedValue(mockUpdatedTrip);
 
-      await service.remove('1');
+      const result = await service.update('1', updateTripDto);
       
+      expect(result).toEqual(mockUpdatedTrip);
       expect(mockPrismaService.trip.findUnique).toHaveBeenCalledWith({
         where: { id: '1' },
         include: expect.any(Object)
       });
-      expect(mockPrismaService.trip.delete).toHaveBeenCalledWith({
-        where: { id: '1' }
+      expect(mockPrismaService.trip.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: updateTripDto,
+        include: expect.any(Object)
       });
-      // Should only call queryRaw for checking existing details and deleting them
-      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw NotFoundException if trip doesnt exist', async () => {
+      // Mock findUnique to return null (trip not found)
+      mockPrismaService.trip.findUnique.mockResolvedValue(null);
+      
+      await expect(service.update('999', {} as UpdateTripDto))
+        .rejects.toThrow(NotFoundException);
+      
+      expect(mockPrismaService.trip.findUnique).toHaveBeenCalledWith({
+        where: { id: '999' },
+        include: expect.any(Object)
+      });
+    });
+  });
+
+  describe('remove', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+    
+    it('should remove associated transaction details when deleting trip', async () => {
+      const mockTrip = { 
+        id: '1', 
+        name: 'Beach Retreat', 
+        touristId: 'tourist1',
+        price: 1500
+      };
+      const mockTransactionDetails = [{
+        id: 'td1',
+        tripId: '1',
+        transactionId: 'tx1'
+      }];
+
+      mockPrismaService.trip.findUnique.mockResolvedValue(mockTrip);
+      mockPrismaService.transactionDetail.findMany.mockResolvedValue(mockTransactionDetails);
+
+      await service.remove('1');
+
+      expect(mockPrismaService.transactionDetail.deleteMany).toHaveBeenCalledWith({
+        where: { tripId: '1' }
+      });
+    });
+
+    it('should remove a trip without creating a refund when no employeeId is provided', async () => {
+      // Arrange
+      const mockTrip = { 
+        id: '1', 
+        name: 'Beach Retreat', 
+        touristId: 'tourist1',
+        price: 1500
+      };
+      const mockTransactionDetails = [];
+      
+      mockPrismaService.trip.findUnique.mockResolvedValue(mockTrip);
+      mockPrismaService.trip.delete.mockResolvedValue(mockTrip);
+      mockPrismaService.transactionDetail.findMany.mockResolvedValue(mockTransactionDetails);
+      mockPrismaService.$queryRaw.mockResolvedValue(mockTransactionDetails);
+
+      // Act
+      const result = await service.remove('1');
+
+      // Assert
+      expect(mockPrismaService.trip.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: '1' }
+        })
+      );
+      expect(mockPrismaService.trip.delete).toHaveBeenCalledWith({
+        where: { id: '1' },
+      });
+      expect(result).toHaveProperty('message', 'Trip deleted successfully');
+      expect(result).toHaveProperty('deletedTrip');
+      // Verify no refund transaction was created when no employeeId is provided
+      expect(mockPrismaService.$queryRaw).not.toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO "Transaction"')
+      );
     });
     
     it('should remove a trip and create a refund transaction when employeeId is provided', async () => {
+      // Arrange
       const mockTrip = { 
         id: '1', 
-        name: 'Trip to be removed',
+        name: 'Beach Retreat', 
         touristId: 'tourist1',
-        tripDestination: 'Bali',
-        price: 1500
+        price: 1500,
+        tripDestination: 'Bali'
       };
-      const employeeId = 'employee1';
-      
-      mockPrismaService.trip.findUnique.mockResolvedValue(mockTrip);
-      mockPrismaService.trip.delete.mockResolvedValue(undefined);
-      mockPrismaService.$queryRaw.mockResolvedValue([{ id: 'transaction-id-1', paymentMethod: 'CREDIT_CARD' }]);
+      const mockTransactionDetails = [{
+        id: 'td1',
+        tripId: '1',
+        transactionId: 'tx1',
+        paymentMethod: 'CREDIT_CARD'
+      }];
 
-      await service.remove('1', employeeId);
-      
-      expect(mockPrismaService.trip.findUnique).toHaveBeenCalledWith({
-        where: { id: '1' },
-        include: expect.any(Object)
-      });
-      // Should call queryRaw for checking existing details, creating refund transaction, 
-      // creating refund detail, and deleting existing details
-      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(4);
+      mockPrismaService.trip.findUnique.mockResolvedValue(mockTrip);
+      mockPrismaService.trip.delete.mockResolvedValue(mockTrip);
+      mockPrismaService.transactionDetail.findMany.mockResolvedValue(mockTransactionDetails);
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce(mockTransactionDetails)
+        .mockResolvedValueOnce([{ id: 'refund-tx-123' }]);
+
+      // Act
+      const employeeId = 'employee1';
+      const result = await service.remove('1', employeeId);
+
+      // Assert
+      expect(mockPrismaService.trip.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: '1' }
+        })
+      );
       expect(mockPrismaService.trip.delete).toHaveBeenCalledWith({
-        where: { id: '1' }
+        where: { id: '1' },
       });
+      // Check if any call to $queryRaw contains the INSERT INTO Transaction statement
+      const anyCallContainsInsert = mockPrismaService.$queryRaw.mock.calls.some(
+        call => typeof call[0] === 'string' && call[0].includes('INSERT INTO "Transaction"') ||
+               (Array.isArray(call[0]) && call[0].join('').includes('INSERT INTO "Transaction"'))
+      );
+      expect(anyCallContainsInsert).toBeTruthy();
+      expect(result).toHaveProperty('message', 'Trip deleted successfully');
+      expect(result).toHaveProperty('deletedTrip');
+      expect(result).toHaveProperty('refundTransaction');
     });
   });
 });

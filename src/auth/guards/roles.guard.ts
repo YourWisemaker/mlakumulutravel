@@ -18,6 +18,13 @@ export class RolesGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
-    return requiredRoles.some((role) => user.role === role);
+
+    // More flexible role check - convert to lowercase strings for comparison
+    return requiredRoles.some((role) => {
+      // Handle case where user.role could be either a string or an enum
+      const userRoleStr = typeof user.role === 'string' ? user.role.toLowerCase() : String(user.role).toLowerCase();
+      const requiredRoleStr = typeof role === 'string' ? role.toLowerCase() : String(role).toLowerCase();
+      return userRoleStr === requiredRoleStr;
+    });
   }
 }

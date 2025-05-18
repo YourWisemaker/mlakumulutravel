@@ -5,6 +5,7 @@ import { TransactionDto } from './dto/transaction.dto';
 import { TransactionDetailDto } from './dto/transaction-detail.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { TouristOwnerGuard } from '../auth/guards/tourist-owner.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
 
@@ -28,7 +29,8 @@ export class TransactionsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a transaction by ID' })
+  @Roles(UserRole.EMPLOYEE)
+  @ApiOperation({ summary: 'Get a transaction by ID (employees only)' })
   @ApiParam({ name: 'id', description: 'Transaction ID' })
   @ApiResponse({
     status: 200,
@@ -41,7 +43,8 @@ export class TransactionsController {
   }
 
   @Get('tourist/:touristId')
-  @ApiOperation({ summary: 'Get transactions by tourist ID' })
+  @UseGuards(TouristOwnerGuard)
+  @ApiOperation({ summary: 'Get transactions by tourist ID (tourists can only access their own)' })
   @ApiParam({ name: 'touristId', description: 'Tourist ID' })
   @ApiResponse({
     status: 200,
@@ -53,7 +56,8 @@ export class TransactionsController {
   }
 
   @Get('trip/:tripId')
-  @ApiOperation({ summary: 'Get transactions by trip ID' })
+  @Roles(UserRole.EMPLOYEE)
+  @ApiOperation({ summary: 'Get transactions by trip ID (employees only)' })
   @ApiParam({ name: 'tripId', description: 'Trip ID' })
   @ApiResponse({
     status: 200,

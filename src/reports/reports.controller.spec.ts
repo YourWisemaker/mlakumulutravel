@@ -81,7 +81,8 @@ describe('ReportsController', () => {
       
       expect(mockReportsService.generateReport).toHaveBeenCalledWith(
         exportReportDto.touristId,
-        exportReportDto.format
+        exportReportDto.format,
+        req.user.id  // Include the userId parameter
       );
       
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
@@ -124,7 +125,8 @@ describe('ReportsController', () => {
       
       expect(mockReportsService.generateReport).toHaveBeenCalledWith(
         exportReportDto.touristId,
-        exportReportDto.format
+        exportReportDto.format,
+        req.user.id  // Include the userId parameter
       );
       
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
@@ -133,38 +135,30 @@ describe('ReportsController', () => {
         `attachment; filename=${reportResult.fileName}`
       );
     });
-    
+
     it('should handle errors gracefully', async () => {
       const exportReportDto: ExportReportDto = {
         touristId: 'tourist1',
         format: ReportFormat.PDF,
       };
       
-      const req = { 
-        user: { 
-          id: 'employee1', 
-          role: 'employee' 
-        } 
-      };
-      
-      // Create a complete mock Response object with all needed methods
+      const req = { user: { id: 'user1' } };
       const res = {
         setHeader: jest.fn(),
         status: jest.fn().mockReturnThis(),
         json: jest.fn().mockReturnThis(),
         send: jest.fn().mockReturnThis(),
-        end: jest.fn().mockReturnThis(),
       };
       
-      // Mock an error response
-      mockReportsService.generateReport.mockRejectedValue(new Error('Test error'));
+      const errorMessage = 'Failed to generate report';
+      mockReportsService.generateReport.mockRejectedValue(new Error(errorMessage));
       
       await controller.exportReport(exportReportDto, req, res as any);
       
       expect(res.status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Failed to generate report',
-        error: 'Test error',
+      expect(res.json).toHaveBeenCalledWith({ 
+        message: 'Failed to generate report', 
+        error: errorMessage 
       });
     });
   });

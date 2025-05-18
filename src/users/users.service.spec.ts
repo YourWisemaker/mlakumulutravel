@@ -105,14 +105,22 @@ describe('UsersService', () => {
       expect(mockPrismaService.user.findUnique).toHaveBeenCalledWith({
         where: { email: createUserDto.email },
       });
+      // Use expect.objectContaining instead of exact matching since password will be hashed
       expect(mockPrismaService.user.create).toHaveBeenCalledWith({
-        data: {
-          ...createUserDto,
+        data: expect.objectContaining({
+          firstName: createUserDto.firstName,
+          lastName: createUserDto.lastName,
+          email: createUserDto.email,
+          role: createUserDto.role,
           employee: {
-            create: {},
-          },
-        },
+            create: {}
+          }
+        })
       });
+      
+      // Verify password was NOT stored as plaintext
+      const createCall = mockPrismaService.user.create.mock.calls[0][0];
+      expect(createCall.data.password).not.toEqual('password123');
     });
 
     it('should create a tourist user', async () => {
@@ -139,14 +147,22 @@ describe('UsersService', () => {
       expect(mockPrismaService.user.findUnique).toHaveBeenCalledWith({
         where: { email: createUserDto.email },
       });
+      // Use expect.objectContaining instead of exact matching since password will be hashed
       expect(mockPrismaService.user.create).toHaveBeenCalledWith({
-        data: {
-          ...createUserDto,
+        data: expect.objectContaining({
+          firstName: createUserDto.firstName,
+          lastName: createUserDto.lastName,
+          email: createUserDto.email,
+          role: createUserDto.role,
           tourist: {
-            create: {},
-          },
-        },
+            create: {}
+          }
+        })
       });
+      
+      // Verify password was NOT stored as plaintext
+      const createCall = mockPrismaService.user.create.mock.calls[0][0];
+      expect(createCall.data.password).not.toEqual('password123');
     });
 
     it('should throw ConflictException if email already exists', async () => {

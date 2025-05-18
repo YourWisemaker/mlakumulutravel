@@ -3,11 +3,12 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
   UseGuards,
-  Request,
+  type Request as _Request,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -20,6 +21,7 @@ import { CreateTouristDto } from "./dto/create-tourist.dto";
 import { UpdateTouristDto } from "./dto/update-tourist.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
+import { TouristOwnerGuard } from "../auth/guards/tourist-owner.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { UserRole } from "../users/entities/user.entity";
 
@@ -39,16 +41,13 @@ export class TouristsController {
   }
 
   @ApiOperation({ summary: "Get tourist by ID" })
-  @ApiResponse({ status: 200, description: "Returns tourist by ID" })
+  @ApiResponse({ status: 200, description: "Returns tourist by ID (tourists can only access their own profile)" })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TouristOwnerGuard)
   @Get(":id")
-  findOne(@Param("id") id: string, @Request() req) {
-    // Check if employee or if tourist is requesting their own profile
-    if (req.user.role === UserRole.EMPLOYEE || req.user.id === id) {
-      return this.touristsService.findOne(id);
-    }
-    return this.touristsService.findByUserId(id);
+  findOne(@Param("id") id: string) {
+    // Always use tourist ID for this endpoint
+    return this.touristsService.findOne(id);
   }
 
   @ApiOperation({ summary: "Create new tourist profile" })
@@ -65,22 +64,23 @@ export class TouristsController {
   }
 
   @ApiOperation({ summary: "Update tourist profile" })
+  @ApiResponse({ status: 200, description: "Tourist profile updated successfully (tourists can only update their own profile)" })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, TouristOwnerGuard)
+  @Put(":id")
+  update(@Param("id") id: string, @Body() updateTouristDto: UpdateTouristDto) {
+    return this.touristsService.update(id, updateTouristDto);
+  }
+
+  @ApiOperation({ summary: "Update partial tourist profile" })
   @ApiResponse({
     status: 200,
-    description: "Tourist profile updated successfully",
+    description: "Tourist profile partially updated successfully (tourists can only update their own profile)",
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @Put(":id")
-  update(
-    @Param("id") id: string,
-    @Body() updateTouristDto: UpdateTouristDto,
-    @Request() req,
-  ) {
-    // Check if employee or if tourist is updating their own profile
-    if (req.user.role === UserRole.EMPLOYEE || req.user.id === id) {
-      return this.touristsService.update(id, updateTouristDto);
-    }
+  @UseGuards(JwtAuthGuard, TouristOwnerGuard)
+  @Patch(":id")
+  patch(@Param("id") id: string, @Body() updateTouristDto: UpdateTouristDto) {
     return this.touristsService.update(id, updateTouristDto);
   }
 

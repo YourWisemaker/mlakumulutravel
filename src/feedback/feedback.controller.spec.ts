@@ -2,21 +2,37 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { FeedbackController } from './feedback.controller';
 import { FeedbackService } from './feedback.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { TouristOwnerGuard } from '../auth/guards/tourist-owner.guard';
 
 describe('FeedbackController', () => {
   let controller: FeedbackController;
   let _service: FeedbackService;
 
   const mockFeedbackService = {
-    findAll: jest.fn(),
+    findAll: jest.fn().mockImplementation(() => {
+      return [{ id: '1', rating: 5, comment: 'Great trip!' }, { id: '2', rating: 4, comment: 'Good experience' }];
+    }),
     findOne: jest.fn(),
     findByTrip: jest.fn(),
-    findByTourist: jest.fn(),
+    findByTourist: jest.fn().mockImplementation(() => {
+      return [{ id: '1', rating: 5, comment: 'Great trip!', touristId: 'tourist1' }];
+    }),
     create: jest.fn(),
+    update: jest.fn(),
     remove: jest.fn(),
   };
 
+  // Mock guards
+  const mockJwtAuthGuard = { canActivate: jest.fn().mockReturnValue(true) };
+  const mockRolesGuard = { canActivate: jest.fn().mockReturnValue(true) };
+  const mockTouristOwnerGuard = { canActivate: jest.fn().mockReturnValue(true) };
+
   beforeEach(async () => {
+    // Reset all mocks before each test
+    jest.clearAllMocks();
+    
     const module: TestingModule = await Test.createTestingModule({
       controllers: [FeedbackController],
       providers: [
@@ -25,7 +41,14 @@ describe('FeedbackController', () => {
           useValue: mockFeedbackService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue(mockJwtAuthGuard)
+      .overrideGuard(RolesGuard)
+      .useValue(mockRolesGuard)
+      .overrideGuard(TouristOwnerGuard)
+      .useValue(mockTouristOwnerGuard)
+      .compile();
 
     controller = module.get<FeedbackController>(FeedbackController);
     _service = module.get<FeedbackService>(FeedbackService);
@@ -40,17 +63,38 @@ describe('FeedbackController', () => {
   });
 
   describe('findAll', () => {
-    it('should return all feedback', async () => {
-      const mockFeedback = [
-        { id: '1', rating: 5, comment: 'Great trip!' },
-        { id: '2', rating: 4, comment: 'Good experience' },
-      ];
-      mockFeedbackService.findAll.mockResolvedValue(mockFeedback);
-
-      const result = await controller.findAll();
+    it('should return all feedback for employee users', () => {
+      // Set up the mock to return data
+      const mockEmployeeFeedback = [{ id: '1', rating: 5, comment: 'Great trip!' }, { id: '2', rating: 4, comment: 'Good experience' }];
+      mockFeedbackService.findAll.mockReturnValue(mockEmployeeFeedback);
       
-      expect(result).toEqual(mockFeedback);
+      // Create the request object with employee role
+      const req = { user: { id: 'employee1', role: 'employee' } };
+      
+      // Call the controller method
+      const result = controller.findAll(req);
+      
+      // Verify the result and that the correct service method was called
+      expect(result).toBe(mockEmployeeFeedback);
       expect(mockFeedbackService.findAll).toHaveBeenCalled();
+      expect(mockFeedbackService.findByTourist).not.toHaveBeenCalled();
+    });
+
+    it('should return only tourist\'s own feedback for tourist users', () => {
+      // Set up the mock to return data
+      const mockTouristFeedback = [{ id: '1', rating: 5, comment: 'Great trip!', touristId: 'tourist1' }];
+      mockFeedbackService.findByTourist.mockReturnValue(mockTouristFeedback);
+      
+      // Create the request object with tourist role
+      const req = { user: { id: 'tourist1', role: 'tourist' } };
+      
+      // Call the controller method
+      const result = controller.findAll(req);
+      
+      // Verify the result and that the correct service method was called
+      expect(result).toBe(mockTouristFeedback);
+      expect(mockFeedbackService.findByTourist).toHaveBeenCalledWith('tourist1');
+      expect(mockFeedbackService.findAll).not.toHaveBeenCalled();
     });
   });
 
@@ -124,11 +168,13 @@ describe('FeedbackController', () => {
 
   describe('remove', () => {
     it('should remove feedback', async () => {
-      mockFeedbackService.remove.mockResolvedValue(undefined);
+      const userId = 'user1';
+      const req = { user: { id: userId } };
+      mockFeedbackService.remove.mockResolvedValue({ message: 'Feedback deleted successfully' });
 
-      await controller.remove('1');
+      await controller.remove('1', req);
       
-      expect(mockFeedbackService.remove).toHaveBeenCalledWith('1');
+      expect(mockFeedbackService.remove).toHaveBeenCalledWith('1', userId);
     });
   });
 });

@@ -4,7 +4,9 @@ import {
   type SentimentResult as _SentimentResult,
 } from "../sentiment/sentiment.service";
 import { CreateFeedbackDto } from "./dto/create-feedback.dto";
+import { UpdateFeedbackDto } from "./dto/update-feedback.dto";
 import { PrismaService } from "../prisma/prisma.service";
+import { excludePassword } from "../common/utils/exclude-password.util";
 
 @Injectable()
 export class FeedbackService {
@@ -14,7 +16,7 @@ export class FeedbackService {
   ) {}
 
   async findAll() {
-    return this.prisma.feedback.findMany({
+    const feedbacks = await this.prisma.feedback.findMany({
       include: {
         trip: true,
         tourist: {
@@ -25,6 +27,15 @@ export class FeedbackService {
         sentimentAnalysis: true,
       },
     });
+    
+    // Remove passwords from the user data
+    return feedbacks.map(feedback => ({
+      ...feedback,
+      tourist: feedback.tourist ? {
+        ...feedback.tourist,
+        user: excludePassword(feedback.tourist.user)
+      } : feedback.tourist
+    }));
   }
 
   async findOne(id: string) {
@@ -44,12 +55,19 @@ export class FeedbackService {
     if (!feedback) {
       throw new NotFoundException(`Feedback with ID ${id} not found`);
     }
-
-    return feedback;
+    
+    // Remove password from the user data
+    return {
+      ...feedback,
+      tourist: feedback.tourist ? {
+        ...feedback.tourist,
+        user: excludePassword(feedback.tourist.user)
+      } : feedback.tourist
+    };
   }
 
   async findByTrip(tripId: string) {
-    return this.prisma.feedback.findMany({
+    const feedbacks = await this.prisma.feedback.findMany({
       where: { tripId },
       include: {
         tourist: {
@@ -60,16 +78,49 @@ export class FeedbackService {
         sentimentAnalysis: true,
       },
     });
+    
+    // Remove passwords from the user data
+    return feedbacks.map(feedback => ({
+      ...feedback,
+      tourist: feedback.tourist ? {
+        ...feedback.tourist,
+        user: excludePassword(feedback.tourist.user)
+      } : feedback.tourist
+    }));
   }
 
-  async findByTourist(touristId: string) {
-    return this.prisma.feedback.findMany({
-      where: { touristId },
+  async findByTourist(userId: string) {
+    // First, find the tourist ID associated with this user ID
+    const tourist = await this.prisma.tourist.findFirst({
+      where: { userId },
+    });
+    
+    if (!tourist) {
+      return []; // If no tourist found for this user ID, return empty array
+    }
+    
+    // Now use the tourist ID to find feedbacks
+    const feedbacks = await this.prisma.feedback.findMany({
+      where: { touristId: tourist.id },
       include: {
         trip: true,
         sentimentAnalysis: true,
+        tourist: {
+          include: {
+            user: true,
+          },
+        },
       },
     });
+    
+    // Remove passwords from the user data
+    return feedbacks.map(feedback => ({
+      ...feedback,
+      tourist: feedback.tourist ? {
+        ...feedback.tourist,
+        user: excludePassword(feedback.tourist.user)
+      } : feedback.tourist
+    }));
   }
 
   async create(userId: string, createFeedbackDto: CreateFeedbackDto) {
@@ -92,14 +143,34 @@ export class FeedbackService {
     }
 
     // Find the tourist by user ID
-    const tourist = await this.prisma.tourist.findUnique({
+    let tourist = await this.prisma.tourist.findUnique({
       where: { userId },
     });
 
+    // If no tourist profile exists, create a basic one
     if (!tourist) {
-      throw new NotFoundException(
-        `Tourist profile not found for user ID ${userId}`,
-      );
+      // First verify the user exists
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      
+      if (!user) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+      
+      // Create a basic tourist profile
+      tourist = await this.prisma.tourist.create({
+        data: {
+          // Set basic placeholder values that can be updated later
+          passportNumber: 'PENDING',
+          nationality: 'PENDING',
+          phoneNumber: user.email || 'PENDING', // Use email as contact if available
+          address: 'PENDING',
+          user: {
+            connect: { id: userId },
+          },
+        },
+      });
     }
 
     // Analyze sentiment
@@ -138,26 +209,151 @@ export class FeedbackService {
     });
   }
 
-  async remove(id: string): Promise<void> {
+  async update(id: string, userId: string, updateFeedbackDto: UpdateFeedbackDto) {
     // First ensure the feedback exists
-    await this.findOne(id);
+    const existingFeedback = await this.findOne(id);
+    
+    // Verify the user owns this feedback or is an employee
+    const userTourist = await this.prisma.tourist.findUnique({
+      where: { userId },
+      include: { user: true }
+    });
+    
+    // If not found or not the owner (and not an employee), throw error
+    if (!userTourist) {
+      throw new NotFoundException(`Tourist profile not found for user ID ${userId}`);
+    }
+    
+    const isOwner = existingFeedback.tourist.id === userTourist.id;
+    const isEmployee = userTourist.user.role === 'EMPLOYEE';
+    
+    if (!isOwner && !isEmployee) {
+      throw new NotFoundException(`Feedback with ID ${id} not found`);
+    }
+    
+    // Prepare data for update
+    const data: any = {};
+    
+    if (updateFeedbackDto.rating !== undefined) {
+      data.rating = updateFeedbackDto.rating;
+    }
+    
+    if (updateFeedbackDto.comment !== undefined) {
+      data.comment = updateFeedbackDto.comment;
+      
+      // If comment is updated, reanalyze sentiment
+      const sentimentAnalysis = await this.sentimentService.analyzeSentiment(
+        updateFeedbackDto.comment
+      );
+      
+      // If there's an existing sentiment analysis, update it
+      if (existingFeedback.sentimentAnalysisId) {
+        await this.prisma.sentimentAnalysis.update({
+          where: { id: existingFeedback.sentimentAnalysisId },
+          data: {
+            sentiment: sentimentAnalysis.type,
+            confidence: sentimentAnalysis.confidence,
+            rawAnalysis: sentimentAnalysis.raw || {}
+          }
+        });
+      } else {
+        // If no existing sentiment analysis, create a new one
+        const newSentimentAnalysis = await this.prisma.sentimentAnalysis.create({
+          data: {
+            sentiment: sentimentAnalysis.type,
+            confidence: sentimentAnalysis.confidence,
+            rawAnalysis: sentimentAnalysis.raw || {}
+          },
+        });
+        
+        data.sentimentAnalysisId = newSentimentAnalysis.id;
+      }
+    }
+    
+    // Update the feedback
+    const updatedFeedback = await this.prisma.feedback.update({
+      where: { id },
+      data,
+      include: {
+        trip: true,
+        tourist: {
+          include: {
+            user: true,
+          },
+        },
+        sentimentAnalysis: true,
+      },
+    });
+    
+    // Remove password from response
+    return {
+      ...updatedFeedback,
+      tourist: updatedFeedback.tourist ? {
+        ...updatedFeedback.tourist,
+        user: excludePassword(updatedFeedback.tourist.user)
+      } : updatedFeedback.tourist
+    };
+  }
 
-    // Delete the associated sentiment analysis record first
-    // We need to get the sentimentAnalysisId from the feedback first
+  async remove(id: string, userId?: string): Promise<any> {
+    // First ensure the feedback exists and save the data for response
+    const existingFeedback = await this.findOne(id);
+    
+    // If userId is provided, check if user is the owner or an employee
+    if (userId) {
+      // Find the tourist associated with the user
+      const userTourist = await this.prisma.tourist.findUnique({
+        where: { userId },
+        include: { user: true },
+      });
+      
+      // If not found, throw error
+      if (!userTourist) {
+        throw new NotFoundException(`Tourist profile not found for user ID ${userId}`);
+      }
+      
+      const isOwner = existingFeedback.tourist.id === userTourist.id;
+      const isEmployee = userTourist.user.role === 'EMPLOYEE';
+      
+      // If not the owner and not an employee, deny access
+      if (!isOwner && !isEmployee) {
+        throw new NotFoundException(`Feedback with ID ${id} not found`);
+      }
+    }
+
+    // Get the feedback with its sentiment analysis ID
     const feedback = await this.prisma.feedback.findUnique({
       where: { id },
       select: { sentimentAnalysisId: true },
     });
+    
+    // Store the sentiment analysis ID if it exists
+    const sentimentAnalysisId = feedback?.sentimentAnalysisId;
 
-    if (feedback?.sentimentAnalysisId) {
-      await this.prisma.sentimentAnalysis.delete({
-        where: { id: feedback.sentimentAnalysisId },
-      });
-    }
-
-    // Then delete the feedback
+    // First, delete the feedback to remove the reference
     await this.prisma.feedback.delete({
       where: { id },
     });
+
+    // Then, if sentiment analysis exists, delete it as well
+    if (sentimentAnalysisId) {
+      try {
+        await this.prisma.sentimentAnalysis.delete({
+          where: { id: sentimentAnalysisId },
+        });
+      } catch (error) {
+        console.log(`Error deleting sentiment analysis ${sentimentAnalysisId}: ${error.message}`);
+        // We can ignore this error since the feedback was already deleted
+      }
+    }
+    
+    // Return a success message along with the deleted feedback data
+    return {
+      message: "Feedback deleted successfully",
+      feedback: {
+        ...existingFeedback,
+        deletedAt: new Date()
+      }
+    };
   }
 }

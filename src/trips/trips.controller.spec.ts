@@ -3,23 +3,38 @@ import { TripsController } from './trips.controller';
 import { TripsService } from './trips.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
-import { UserRole } from '../users/entities/user.entity';
+import { UserRole as _UserRole } from '../users/entities/user.entity';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { TouristOwnerGuard } from '../auth/guards/tourist-owner.guard';
 
 describe('TripsController', () => {
   let controller: TripsController;
   let _service: TripsService;
 
   const mockTripsService = {
-    findAll: jest.fn(),
+    findAll: jest.fn().mockImplementation(() => {
+      return [{ id: '1', name: 'Trip 1' }, { id: '2', name: 'Trip 2' }];
+    }),
     findOne: jest.fn(),
     findAllByTourist: jest.fn(),
-    findAllByTouristUserId: jest.fn(), 
+    findAllByTouristUserId: jest.fn().mockImplementation(() => {
+      return [{ id: '1', name: 'Trip 1', touristId: 'tourist1' }];
+    }),
     create: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
   };
 
+  // Mock guards
+  const mockJwtAuthGuard = { canActivate: jest.fn().mockReturnValue(true) };
+  const mockRolesGuard = { canActivate: jest.fn().mockReturnValue(true) };
+  const mockTouristOwnerGuard = { canActivate: jest.fn().mockReturnValue(true) };
+
   beforeEach(async () => {
+    // Reset all mocks before each test
+    jest.clearAllMocks();
+    
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TripsController],
       providers: [
@@ -28,7 +43,14 @@ describe('TripsController', () => {
           useValue: mockTripsService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue(mockJwtAuthGuard)
+      .overrideGuard(RolesGuard)
+      .useValue(mockRolesGuard)
+      .overrideGuard(TouristOwnerGuard)
+      .useValue(mockTouristOwnerGuard)
+      .compile();
 
     controller = module.get<TripsController>(TripsController);
     _service = module.get<TripsService>(TripsService);
@@ -43,17 +65,38 @@ describe('TripsController', () => {
   });
 
   describe('findAll', () => {
-    it('should return all trips', async () => {
-      const mockTrips = [
-        { id: '1', name: 'Trip 1' },
-        { id: '2', name: 'Trip 2' },
-      ];
-      mockTripsService.findAll.mockResolvedValue(mockTrips);
-
-      const result = await controller.findAll();
+    it('should return all trips for employee users', () => {
+      // Set up the mock to return data
+      const mockEmployeeTrips = [{ id: '1', name: 'Trip 1' }, { id: '2', name: 'Trip 2' }];
+      mockTripsService.findAll.mockReturnValue(mockEmployeeTrips);
       
-      expect(result).toEqual(mockTrips);
+      // Create the request object with employee role
+      const req = { user: { id: 'employee1', role: 'employee' } };
+      
+      // Call the controller method
+      const result = controller.findAll(req);
+      
+      // Verify the result and that the correct service method was called
+      expect(result).toBe(mockEmployeeTrips);
       expect(mockTripsService.findAll).toHaveBeenCalled();
+      expect(mockTripsService.findAllByTouristUserId).not.toHaveBeenCalled();
+    });
+
+    it('should return only tourist\'s own trips for tourist users', () => {
+      // Set up the mock to return data
+      const mockTouristTrips = [{ id: '1', name: 'Trip 1', touristId: 'tourist1' }];
+      mockTripsService.findAllByTouristUserId.mockReturnValue(mockTouristTrips);
+      
+      // Create the request object with tourist role
+      const req = { user: { id: 'tourist1', role: 'tourist' } };
+      
+      // Call the controller method
+      const result = controller.findAll(req);
+      
+      // Verify the result and that the correct service method was called
+      expect(result).toBe(mockTouristTrips);
+      expect(mockTripsService.findAllByTouristUserId).toHaveBeenCalledWith('tourist1');
+      expect(mockTripsService.findAll).not.toHaveBeenCalled();
     });
   });
 
@@ -71,53 +114,22 @@ describe('TripsController', () => {
   });
 
   describe('findByTourist', () => {
-    it('should return trips for employee viewing any tourist', async () => {
+    it('should return trips for a tourist', async () => {
       const mockTrips = [
         { id: '1', name: 'Trip 1', touristId: 'tourist1' },
         { id: '2', name: 'Trip 2', touristId: 'tourist1' },
       ];
-      mockTripsService.findAllByTouristUserId.mockResolvedValue(mockTrips);
+      mockTripsService.findAllByTourist.mockResolvedValue(mockTrips);
       
-      // Mock request with employee role
-      const req = { user: { id: 'employee1', role: UserRole.EMPLOYEE } };
-      
-      const result = await controller.findByTourist('tourist1', req);
+      const result = await controller.findByTourist('tourist1');
       
       expect(result).toEqual(mockTrips);
-      expect(mockTripsService.findAllByTouristUserId).toHaveBeenCalledWith('tourist1');
+      expect(mockTripsService.findAllByTourist).toHaveBeenCalledWith('tourist1');
     });
 
-    it('should return trips for tourist viewing their own trips', async () => {
-      const mockTrips = [
-        { id: '1', name: 'Trip 1', touristId: 'tourist1' },
-        { id: '2', name: 'Trip 2', touristId: 'tourist1' },
-      ];
-      mockTripsService.findAllByTouristUserId.mockResolvedValue(mockTrips);
-      
-      // Mock request with tourist viewing their own trips
-      const req = { user: { id: 'tourist1', role: UserRole.TOURIST } };
-      
-      const result = await controller.findByTourist('tourist1', req);
-      
-      expect(result).toEqual(mockTrips);
-      expect(mockTripsService.findAllByTouristUserId).toHaveBeenCalledWith('tourist1');
-    });
 
-    it('should return only own trips for tourist trying to view others', async () => {
-      const mockTrips = [
-        { id: '1', name: 'Trip 1', touristId: 'tourist1' },
-      ];
-      mockTripsService.findAllByTouristUserId.mockResolvedValue(mockTrips);
-      
-      // Mock request with tourist trying to view another tourist's trips
-      const req = { user: { id: 'tourist1', role: UserRole.TOURIST } };
-      
-      const result = await controller.findByTourist('tourist2', req);
-      
-      expect(result).toEqual(mockTrips);
-      // Should call with the requester's ID, not the requested tourist ID
-      expect(mockTripsService.findAllByTouristUserId).toHaveBeenCalledWith('tourist1');
-    });
+
+
   });
 
   describe('create', () => {
@@ -138,10 +150,11 @@ describe('TripsController', () => {
       const mockTrip = { id: '1', ...createTripDto };
       mockTripsService.create.mockResolvedValue(mockTrip);
 
-      const result = await controller.create(createTripDto);
+      const req = { user: { id: 'employee1' } };
+      const result = await controller.create(createTripDto, req);
       
       expect(result).toEqual(mockTrip);
-      expect(mockTripsService.create).toHaveBeenCalledWith(createTripDto);
+      expect(mockTripsService.create).toHaveBeenCalledWith(createTripDto, 'employee1');
     });
   });
 
@@ -155,10 +168,11 @@ describe('TripsController', () => {
       const mockUpdatedTrip = { id: '1', name: 'Updated Trip Name', description: 'Updated description' };
       mockTripsService.update.mockResolvedValue(mockUpdatedTrip);
 
-      const result = await controller.update('1', updateTripDto);
+      const req = { user: { id: 'employee1' } };
+      const result = await controller.update('1', updateTripDto, req);
       
       expect(result).toEqual(mockUpdatedTrip);
-      expect(mockTripsService.update).toHaveBeenCalledWith('1', updateTripDto);
+      expect(mockTripsService.update).toHaveBeenCalledWith('1', updateTripDto, 'employee1');
     });
   });
 
@@ -166,9 +180,10 @@ describe('TripsController', () => {
     it('should remove a trip', async () => {
       mockTripsService.remove.mockResolvedValue(undefined);
 
-      await controller.remove('1');
+      const req = { user: { id: 'employee1' } };
+      await controller.remove('1', req);
       
-      expect(mockTripsService.remove).toHaveBeenCalledWith('1');
+      expect(mockTripsService.remove).toHaveBeenCalledWith('1', 'employee1');
     });
   });
 });

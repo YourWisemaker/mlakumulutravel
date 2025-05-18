@@ -2,17 +2,24 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateTouristDto } from "./dto/create-tourist.dto";
 import { UpdateTouristDto } from "./dto/update-tourist.dto";
+import { excludePassword } from "../common/utils/exclude-password.util";
 
 @Injectable()
 export class TouristsService {
   constructor(private prisma: PrismaService) {}
 
   async findAll() {
-    return this.prisma.tourist.findMany({
+    const tourists = await this.prisma.tourist.findMany({
       include: {
         user: true,
       },
     });
+    
+    // Remove passwords from tourist users
+    return tourists.map(tourist => ({
+      ...tourist,
+      user: excludePassword(tourist.user)
+    }));
   }
 
   async findOne(id: string) {
@@ -27,7 +34,11 @@ export class TouristsService {
       throw new NotFoundException(`Tourist with ID ${id} not found`);
     }
 
-    return tourist;
+    // Remove password from the user object
+    return {
+      ...tourist,
+      user: excludePassword(tourist.user)
+    };
   }
 
   async findByUserId(userId: string) {
@@ -42,7 +53,11 @@ export class TouristsService {
       throw new NotFoundException(`Tourist with user ID ${userId} not found`);
     }
 
-    return tourist;
+    // Remove password from the user object
+    return {
+      ...tourist,
+      user: excludePassword(tourist.user)
+    };
   }
 
   async create(createTouristDto: CreateTouristDto) {

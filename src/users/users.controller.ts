@@ -32,7 +32,51 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.EMPLOYEE)
   @Get("employees/:id")
-  findEmployee(@Param("id") id: string) {
-    return this.usersService.findEmployee(id);
+  async findEmployee(@Param("id") id: string) {
+    console.log(`Attempting to find employee with ID: ${id}`);
+    try {
+      const employee = await this.usersService.findEmployee(id);
+      return employee;
+    } catch (error) {
+      console.error(`Error finding employee with ID ${id}:`, error.message);
+      throw error;
+    }
+  }
+  
+  @ApiOperation({ summary: "Get employee by User ID" })
+  @ApiResponse({ status: 200, description: "Returns employee by User ID" })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.EMPLOYEE)
+  @Get("employee/user/:userId")
+  async findEmployeeByUserId(@Param("userId") userId: string) {
+    console.log(`Attempting to find employee with User ID: ${userId}`);
+    try {
+      const employee = await this.usersService.findEmployeeByUserId(userId);
+      return employee;
+    } catch (error) {
+      console.error(`Error finding employee with User ID ${userId}:`, error.message);
+      throw error;
+    }
+  }
+
+  @ApiOperation({ summary: "Get all users" })
+  @ApiResponse({ status: 200, description: "Returns all users" })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.EMPLOYEE)
+  @Get()
+  findAll() {
+    return this.usersService.findAll();
+  }
+
+  @ApiOperation({ summary: "Get user by ID" })
+  @ApiResponse({ status: 200, description: "Returns user by ID" })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.EMPLOYEE)
+  @Get(":id")
+  findOne(@Param("id") id: string) {
+    return this.usersService.findOne(id);
   }
 }

@@ -3,6 +3,7 @@ import { TransactionsController } from './transactions.controller';
 import { TransactionsService } from './transactions.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { TouristOwnerGuard } from '../auth/guards/tourist-owner.guard';
 
 describe('TransactionsController', () => {
   let controller: TransactionsController;
@@ -21,6 +22,7 @@ describe('TransactionsController', () => {
   // Mock guards
   const mockJwtAuthGuard = { canActivate: jest.fn().mockReturnValue(true) };
   const mockRolesGuard = { canActivate: jest.fn().mockReturnValue(true) };
+  const mockTouristOwnerGuard = { canActivate: jest.fn().mockReturnValue(true) };
 
   const mockTransaction = {
     id: 'transaction-1',
@@ -62,6 +64,8 @@ describe('TransactionsController', () => {
       .useValue(mockJwtAuthGuard)
       .overrideGuard(RolesGuard)
       .useValue(mockRolesGuard)
+      .overrideGuard(TouristOwnerGuard)
+      .useValue(mockTouristOwnerGuard)
       .compile();
 
     controller = module.get<TransactionsController>(TransactionsController);

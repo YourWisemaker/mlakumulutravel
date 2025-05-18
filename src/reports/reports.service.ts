@@ -9,11 +9,53 @@ import * as path from "path";
 @Injectable()
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
+  
+  // Helper function to format destination as readable text
+  private formatDestination(destination: any): string {
+    if (!destination) return 'N/A';
+    
+    if (typeof destination === 'string') {
+      return destination;
+    }
+    
+    if (typeof destination === 'object') {
+      const parts = [];
+      
+      if (destination.location) {
+        parts.push(`Location: ${destination.location}`);
+      }
+      
+      if (destination.attractions && Array.isArray(destination.attractions)) {
+        parts.push(`Attractions: ${destination.attractions.join(', ')}`);
+      }
+      
+      if (destination.coordinates) {
+        parts.push(`Coordinates: ${destination.coordinates.lat}, ${destination.coordinates.lng}`);
+      }
+      
+      return parts.join('\n');
+    }
+    
+    return String(destination);
+  }
 
   async generateReport(
     touristId: string,
     format: ReportFormat,
+    userId: string,
   ): Promise<{ filePath: string; fileName: string }> {
+    // Look up the logged-in user to determine their role
+    const loggedInUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    
+    if (!loggedInUser) {
+      throw new NotFoundException(`User not found`);
+    }
+    
+    // Check if logged-in user is an employee
+    const isEmployee = loggedInUser.role?.toUpperCase() === 'EMPLOYEE';
     // Find the tourist with user information
     const tourist = await this.prisma.tourist.findUnique({
       where: { id: touristId },
@@ -45,15 +87,16 @@ export class ReportsService {
 
     // Generate report based on format
     if (format === ReportFormat.PDF) {
-      return this.generatePdfReport(tourist, trips);
+      return this.generatePdfReport(tourist, trips, isEmployee);
     } else {
-      return this.generateCsvReport(tourist, trips);
+      return this.generateCsvReport(tourist, trips, isEmployee);
     }
   }
 
   private async generatePdfReport(
     tourist: any,
     trips: any[],
+    isEmployee: boolean = false,
   ): Promise<{ filePath: string; fileName: string }> {
     // Ensure temp directory exists
     const tempDir = path.join(process.cwd(), "temp");
@@ -93,11 +136,32 @@ export class ReportsService {
 
     trips.forEach((trip, index) => {
       doc.fontSize(14).text(`Trip #${index + 1}: ${trip.name}`);
-      doc
-        .fontSize(12)
-        .text(`Destination: ${JSON.stringify(trip.tripDestination)}`);
-      doc.fontSize(12).text(`Start Date: ${trip.startDateTime.toISOString()}`);
-      doc.fontSize(12).text(`End Date: ${trip.endDateTime.toISOString()}`);
+      
+      // Format destination as text with new lines instead of JSON
+      doc.fontSize(12).text('Destination:');
+      if (typeof trip.tripDestination === 'object') {
+        const dest = trip.tripDestination;
+        if (dest && dest.location) {
+          doc.fontSize(12).text(`  Location: ${dest.location}`, { indent: 10 });
+        }
+        if (dest && dest.attractions && Array.isArray(dest.attractions)) {
+          doc.fontSize(12).text(`  Attractions:`, { indent: 10 });
+          dest.attractions.forEach(attraction => {
+            doc.fontSize(12).text(`    • ${attraction}`, { indent: 20 });
+          });
+        }
+        if (dest && dest.coordinates) {
+          doc.fontSize(12).text(`  Coordinates: ${dest.coordinates.lat}, ${dest.coordinates.lng}`, { indent: 10 });
+        }
+      } else {
+        doc.fontSize(12).text(`  ${trip.tripDestination}`, { indent: 10 });
+      }
+      
+      // Format dates in UTC format
+      const startDate = new Date(trip.startDateTime);
+      const endDate = new Date(trip.endDateTime);
+      doc.fontSize(12).text(`Start Date: ${startDate.toUTCString()}`);
+      doc.fontSize(12).text(`End Date: ${endDate.toUTCString()}`);
 
       if (trip.price) {
         doc.fontSize(12).text(`Price: $${trip.price}`);
@@ -115,7 +179,8 @@ export class ReportsService {
           doc.fontSize(10).text(`Rating: ${feedback.rating}/5`);
           doc.fontSize(10).text(`Comment: ${feedback.comment}`);
 
-          if (feedback.sentimentAnalysis) {
+          // Only show sentiment analysis if user is an employee
+          if (isEmployee && feedback.sentimentAnalysis) {
             doc
               .fontSize(10)
               .text(`Sentiment: ${feedback.sentimentAnalysis.sentiment}`);
@@ -129,7 +194,7 @@ export class ReportsService {
     // Add footer
     doc
       .fontSize(10)
-      .text(`Report generated on ${new Date().toISOString()}`, {
+      .text(`Report generated on ${new Date().toUTCString()}`, {
         align: "center",
       });
 
@@ -146,6 +211,7 @@ export class ReportsService {
   private async generateCsvReport(
     tourist: any,
     trips: any[],
+    isEmployee: boolean = false,
   ): Promise<{ filePath: string; fileName: string }> {
     // Ensure temp directory exists
     const tempDir = path.join(process.cwd(), "temp");
@@ -177,13 +243,14 @@ export class ReportsService {
         trip.feedbacks.forEach((feedback) => {
           records.push({
             tripName: trip.name,
-            destination: JSON.stringify(trip.tripDestination),
-            startDate: trip.startDateTime.toISOString(),
-            endDate: trip.endDateTime.toISOString(),
+            destination: this.formatDestination(trip.tripDestination),
+            startDate: new Date(trip.startDateTime).toUTCString(),
+            endDate: new Date(trip.endDateTime).toUTCString(),
             price: trip.price || "N/A",
             rating: feedback.rating,
             feedback: feedback.comment,
-            sentiment: feedback.sentimentAnalysis
+            // Only include sentiment data if user is an employee
+            sentiment: isEmployee && feedback.sentimentAnalysis
               ? feedback.sentimentAnalysis.sentiment
               : "N/A",
           });
@@ -191,13 +258,13 @@ export class ReportsService {
       } else {
         records.push({
           tripName: trip.name,
-          destination: JSON.stringify(trip.tripDestination),
-          startDate: trip.startDateTime.toISOString(),
-          endDate: trip.endDateTime.toISOString(),
+          destination: this.formatDestination(trip.tripDestination),
+          startDate: new Date(trip.startDateTime).toUTCString(),
+          endDate: new Date(trip.endDateTime).toUTCString(),
           price: trip.price || "N/A",
           rating: "N/A",
           feedback: "N/A",
-          sentiment: "N/A",
+          sentiment: isEmployee ? "N/A" : "",
         });
       }
     });

@@ -3,7 +3,10 @@ import { TouristsController } from './tourists.controller';
 import { TouristsService } from './tourists.service';
 import { CreateTouristDto } from './dto/create-tourist.dto';
 import { UpdateTouristDto } from './dto/update-tourist.dto';
-import { UserRole } from '../users/entities/user.entity';
+import { UserRole as _UserRole } from '../users/entities/user.entity';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { TouristOwnerGuard } from '../auth/guards/tourist-owner.guard';
 
 describe('TouristsController', () => {
   let controller: TouristsController;
@@ -18,6 +21,11 @@ describe('TouristsController', () => {
     remove: jest.fn(),
   };
 
+  // Mock guards
+  const mockJwtAuthGuard = { canActivate: jest.fn().mockReturnValue(true) };
+  const mockRolesGuard = { canActivate: jest.fn().mockReturnValue(true) };
+  const mockTouristOwnerGuard = { canActivate: jest.fn().mockReturnValue(true) };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TouristsController],
@@ -27,7 +35,14 @@ describe('TouristsController', () => {
           useValue: mockTouristsService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue(mockJwtAuthGuard)
+      .overrideGuard(RolesGuard)
+      .useValue(mockRolesGuard)
+      .overrideGuard(TouristOwnerGuard)
+      .useValue(mockTouristOwnerGuard)
+      .compile();
 
     controller = module.get<TouristsController>(TouristsController);
     _service = module.get<TouristsService>(TouristsService);
@@ -57,47 +72,19 @@ describe('TouristsController', () => {
   });
 
   describe('findOne', () => {
-    it('should return a tourist if requesting user is an employee', async () => {
+    it('should return a tourist by ID', async () => {
       const mockTourist = { id: '1', userId: 'user1', user: { name: 'John Doe' } };
       mockTouristsService.findOne.mockResolvedValue(mockTourist);
       
-      // Mock request with employee role
-      const req = { user: { id: 'employee1', role: UserRole.EMPLOYEE } };
-      
-      const result = await controller.findOne('1', req);
+      const result = await controller.findOne('1');
       
       expect(result).toEqual(mockTourist);
       expect(mockTouristsService.findOne).toHaveBeenCalledWith('1');
-      expect(mockTouristsService.findByUserId).not.toHaveBeenCalled();
     });
 
-    it('should return a tourist if tourist is requesting their own profile', async () => {
-      const mockTourist = { id: '1', userId: 'user1', user: { name: 'John Doe' } };
-      mockTouristsService.findOne.mockResolvedValue(mockTourist);
-      
-      // Mock request with tourist viewing their own profile
-      const req = { user: { id: '1', role: UserRole.TOURIST } };
-      
-      const result = await controller.findOne('1', req);
-      
-      expect(result).toEqual(mockTourist);
-      expect(mockTouristsService.findOne).toHaveBeenCalledWith('1');
-      expect(mockTouristsService.findByUserId).not.toHaveBeenCalled();
-    });
 
-    it('should find tourist by user ID if tourist is requesting another profile', async () => {
-      const mockTourist = { id: '2', userId: 'user2', user: { name: 'Jane Doe' } };
-      mockTouristsService.findByUserId.mockResolvedValue(mockTourist);
-      
-      // Mock request with tourist trying to view another profile
-      const req = { user: { id: '1', role: UserRole.TOURIST } };
-      
-      const result = await controller.findOne('2', req);
-      
-      expect(result).toEqual(mockTourist);
-      expect(mockTouristsService.findOne).not.toHaveBeenCalled();
-      expect(mockTouristsService.findByUserId).toHaveBeenCalledWith('2');
-    });
+
+
   });
 
   describe('create', () => {
@@ -117,46 +104,39 @@ describe('TouristsController', () => {
   });
 
   describe('update', () => {
-    it('should update a tourist profile when employee is requesting', async () => {
+    it('should update a tourist profile', async () => {
       const updateTouristDto: UpdateTouristDto = {
         // Empty object as we're extending PartialType of CreateTouristDto with userId omitted
       };
       
-      const mockTourist = { 
-        id: '1', 
-        userId: 'user1', 
-        user: { name: 'John Doe' },
-      };
+      const mockUpdatedTourist = { id: '1', userId: 'user1', user: { name: 'John Doe' } };
+      mockTouristsService.update.mockResolvedValue(mockUpdatedTourist);
+
+      const result = await controller.update('1', updateTouristDto);
       
-      mockTouristsService.update.mockResolvedValue(mockTourist);
-      
-      // Mock request with employee role
-      const req = { user: { id: 'employee1', role: UserRole.EMPLOYEE } };
-      
-      const result = await controller.update('1', updateTouristDto, req);
-      
-      expect(result).toEqual(mockTourist);
+      expect(result).toEqual(mockUpdatedTourist);
       expect(mockTouristsService.update).toHaveBeenCalledWith('1', updateTouristDto);
     });
 
-    it('should update a tourist profile when tourist is updating their own profile', async () => {
+
+
+    it('should update a tourist profile with specific fields', async () => {
       const updateTouristDto: UpdateTouristDto = {
-        // Empty object as we're extending PartialType of CreateTouristDto with userId omitted
+        phoneNumber: '+6281234567890',
+        nationality: 'Indonesia'
       };
       
       const mockTourist = { 
         id: '1', 
         userId: 'user1', 
         user: { name: 'John Doe' },
+        phoneNumber: '+6281234567890',
+        nationality: 'Indonesia'
       };
       
-      mockTouristsService.findByUserId.mockResolvedValue({ id: '1' });
       mockTouristsService.update.mockResolvedValue(mockTourist);
       
-      // Mock request with tourist updating their own profile
-      const req = { user: { id: 'user1', role: UserRole.TOURIST } };
-      
-      const result = await controller.update('1', updateTouristDto, req);
+      const result = await controller.update('1', updateTouristDto);
       
       expect(result).toEqual(mockTourist);
       expect(mockTouristsService.update).toHaveBeenCalledWith('1', updateTouristDto);
@@ -166,7 +146,7 @@ describe('TouristsController', () => {
   describe('remove', () => {
     it('should remove a tourist profile', async () => {
       mockTouristsService.remove.mockResolvedValue(undefined);
-
+      
       await controller.remove('1');
       
       expect(mockTouristsService.remove).toHaveBeenCalledWith('1');

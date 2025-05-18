@@ -109,10 +109,13 @@ export class TransactionsService {
     // Extract transaction IDs
     const transactionIds = transactionDetails.map(detail => detail.transactionId);
     
-    // Use a string with commas for the IN clause
-    const idsString = transactionIds.map(id => `'${id}'`).join(",");
-    
-    // Get the transactions
+    // PostgreSQL array-based approach for IN clause
+    // Get the transactions using the array_contains operator
+    if (transactionIds.length === 0) {
+      return [];
+    }
+
+    // For PostgreSQL, use the ANY operator with an array
     return await this.prisma.$queryRaw<any[]>`
       SELECT t.*, 
              u."firstName" as "createdByFirstName", 
@@ -123,7 +126,7 @@ export class TransactionsService {
       LEFT JOIN "User" u ON t."createdById" = u.id
       LEFT JOIN "Tourist" tr ON t."touristId" = tr.id
       LEFT JOIN "User" tu ON tr."userId" = tu.id
-      WHERE t.id IN (${this.prisma.$queryRawUnsafe(idsString)})
+      WHERE t.id = ANY(${transactionIds}::text[])
       ORDER BY t."transactionDate" DESC
     `;
   }
@@ -143,7 +146,7 @@ export class TransactionsService {
     
     // Get transaction details with trip information
     return await this.prisma.$queryRaw`
-      SELECT td.*, t."name" as "tripName", t."destination" as "tripDestination", t."price" as "tripPrice" 
+      SELECT td.*, t."name" as "tripName", t."tripDestination" as "tripDestination", t."price" as "tripPrice" 
       FROM "TransactionDetail" td
       LEFT JOIN "Trip" t ON td."tripId" = t.id
       WHERE td."transactionId" = ${transactionId}
